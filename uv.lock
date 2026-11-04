@@ -1296,6 +1296,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
     { name = "pytest" },
 ]
 
@@ -1303,7 +1304,10 @@ dev = [
 requires-dist = [{ name = "fastapi", extras = ["standard"], specifier = ">=0.162.0" }]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.2.0" }]
+dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pytest", specifier = ">=9.2.0" },
+]
 
 [[package]]
 name = "sentry-sdk"

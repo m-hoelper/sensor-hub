@@ -32,7 +32,7 @@ def test_get_mesurement_data_beyond_limit(client):
 
     response = client.get('/measurements?limit=30')
 
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 def test_get_latest_empty_data(client):
 
@@ -75,20 +75,50 @@ def test_seed_data(client, seed_measurements):
 
 @pytest.mark.parametrize(
         ['measurement_id', 'excpected_status'],
-        [('abc', 422), (-3, 400), (0, 400), (5, 200), (12, 404)]
+        [('abc', 422), (-3, 422), (0, 422), (5, 200), (12, 404)]
     )
 
-def test_invalid_ids(client, seed_measurements, measurement_id, excpected_status):
+def test_measurement_ids(client, seed_measurements, measurement_id, excpected_status):
 
     response = client.get(f'/measurements/{measurement_id}')
     assert response.status_code == excpected_status
 
+@pytest.mark.parametrize(
+        ['field', 'value'],
+        [('device_id', ''), ('device_id', 'a'*60), ('co2_ppm', -20), ('co2_ppm', 50_000), ('temperature_c', -20), ('temperature_c', 100), ('humidity_pct', -1), ('humidity_pct', 101)]
+        )
 
+def test_create_measurement_invalid_field_returns_422(client, field, value):
 
+    payload = {"device_id": "esp-1", "co2_ppm": 420,  "temperature_c": 19.5, "humidity_pct": 35.0}
 
+    payload[field] = value
 
+    response = client.post('/measurements/', json= payload)
 
-    
+    assert response.status_code == 422
 
+@pytest.mark.parametrize(
+        ['measurement_id', 'expected_delete_status', 'expected_get_status'],
+        [(8, 204, 404), (9, 204, 404), (-1, 422, 422), (24, 404, 404)]
+)
+def test_delete_measurement(client, seed_measurements, measurement_id, expected_delete_status, expected_get_status):
 
+    response = client.delete(f'/measurements/{measurement_id}')
 
+    assert response.status_code == expected_delete_status
+
+    response = client.get(f'/measurements/{measurement_id}')
+    assert response.status_code == expected_get_status
+
+@pytest.mark.parametrize(
+        ['offset', 'limit', 'length'],
+        [(9,10,1), (2,5,5), (2,15,8), (10,10,0)]
+        )
+
+def test_get_measurements_with_offset_and_limit(client, seed_measurements, offset, limit, length):
+
+    response = client.get(f'/measurements?limit={limit}&offset={offset}')
+    body = response.json()
+
+    assert len(body) == length

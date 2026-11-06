@@ -8,7 +8,7 @@ def client():
 
 @pytest.fixture(autouse=True)
 def reset_states():
-    main.measurement_data = []
+    main.measurement_data = {}
     main.next_id = 1
 
 @pytest.fixture()

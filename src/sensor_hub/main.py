@@ -1,21 +1,26 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query, Path
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
+from typing import Annotated
 
-class Measurement(BaseModel):
-    device_id: str
-    co2_ppm: int
-    temperature_c: float
-    humidity_pct: float
+class MeasurementIn(BaseModel):
+    device_id: str = Field(min_length=1, max_length=50)
+    co2_ppm: int = Field(ge=0, le=40_000)
+    temperature_c: float = Field(ge=-10, le=60)
+    humidity_pct: float = Field(ge=0, le=100)
+
+class MeasurementOut(MeasurementIn):
+    id: int
+    created_at: datetime
 
 MAX_LIMIT = 20
-measurement_data: list[dict] = []
+measurement_data: dict[int, dict] = {}
 next_id = 1
 
 app = FastAPI()
 
 @app.post('/measurements', status_code=201)
-def create_measurement(data: Measurement) -> dict:
+def create_measurement(data: MeasurementIn) -> MeasurementOut:
     global next_id
     
     record = {
@@ -24,58 +29,67 @@ def create_measurement(data: Measurement) -> dict:
         'created_at': datetime.now(timezone.utc)
     }
 
+    measurement_data[next_id] = record
     next_id += 1
-    measurement_data.append(record)
 
-    return record
+    return MeasurementOut(**record)
 
 @app.get('/measurements', status_code=200)
-def get_measurements(device_id: str | None = None, limit: int = 10) -> list[dict]:
+def get_measurements(
+    device_id: Annotated[str | None, Query(min_length=1, max_length=50)] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0 )-> list[MeasurementOut]:
 
-    temp_data = measurement_data
+    keys = []
+    
+    for k in reversed(measurement_data.keys()):
 
-    if limit <= 0 or limit > MAX_LIMIT:
-        raise HTTPException(400, f'limit:{limit} is invalid. must be greater than 0 and smaller equal {MAX_LIMIT}')
+        if device_id is not None:
+            if measurement_data[k]['device_id'] == device_id:
+                keys.append(k)
+        else:
+            keys.append(k)
 
-    if device_id is not None:
-        temp_data = []
-        for d in measurement_data:
-            if d['device_id'] == device_id:
-                temp_data.append(d)
+        if len(keys) == limit + offset:
+            break
 
-    end = len(temp_data)
+    start = min(offset, len(keys))
+    stop = min(offset + limit, len(keys))
+    keys = keys[start:stop]
 
-    if limit > end:
-        limit = end
-
-    data = temp_data[end - limit:]
-    return data
+    return [MeasurementOut(**measurement_data[k]) for k in reversed(keys)]
 
 @app.get('/measurements/latest')
-def get_latest_measurement(device_id: str | None = None) -> dict:
+def get_latest_measurement(device_id: Annotated[str | None, Query(min_length=1, max_length=50)] = None) -> MeasurementOut:
 
     if not measurement_data:
         raise HTTPException(404, 'no data exist yet')
 
-    if device_id is not None:
-        for i in range(len(measurement_data) - 1, -1, -1):
-            if measurement_data[i]['device_id'] == device_id:
-                return measurement_data[i]
-            
-        raise HTTPException(404, f'no data for device: {device_id} exist yet')
 
-    data = measurement_data[-1]
-    return data
+    for k in reversed(measurement_data.keys()):
+        if device_id is not None:
+            if measurement_data[k]['device_id'] == device_id:
+                return MeasurementOut(**measurement_data[k])
+        else:
+            return MeasurementOut(**measurement_data[k])
+            
+
+    raise HTTPException(404, f'no data for device: {device_id} exist yet')
 
 @app.get('/measurements/{measurement_id}', status_code=200)
-def get_measurement_by_id(measurement_id: int) -> dict:
+def get_measurement_by_id(measurement_id: Annotated[int, Path(ge=1)]) -> MeasurementOut:
 
-    if measurement_id <= 0:
-        raise HTTPException(400, 'id is invalid. must be greater than 0')
-
-    if measurement_id > len(measurement_data):
+    if measurement_id not in measurement_data:
         raise HTTPException(404, 'data does not exist')
 
-    data = measurement_data[measurement_id - 1]
+    return MeasurementOut(**measurement_data[measurement_id])
 
-    return data
+@app.delete('/measurements/{measurement_id}', status_code=204)
+def delete_measurement(measurement_id: Annotated[int, Path(ge= 1)]) -> None:
+
+    if measurement_id not in measurement_data:
+        raise HTTPException(404, 'data dose not exist')
+
+    del measurement_data[measurement_id]
+
+    return

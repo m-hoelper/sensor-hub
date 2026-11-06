@@ -2,6 +2,7 @@ import random
 import time
 import httpx
 import json
+import sensor_hub.config as config
 
 URL = "http://127.0.0.1:8000/measurements"
 
@@ -19,12 +20,14 @@ def run_simulator():
     while True:
 
         data = json.dumps(create_random_data())
+        settings = config.get_settings()
 
         try:
             response = httpx.post(
                 URL,
                 content= data,
-                headers= {'Content-Type': 'application/json'}
+                headers= {'Content-Type': 'application/json',
+                          'X-Api-Key': settings.api_key.get_secret_value()}
                 )
             
             print(response)

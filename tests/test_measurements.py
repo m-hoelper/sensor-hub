@@ -122,3 +122,15 @@ def test_get_measurements_with_offset_and_limit(client, seed_measurements, offse
     body = response.json()
 
     assert len(body) == length
+
+@pytest.mark.parametrize(
+        ['header', 'expected_status'],
+        [({'X-Api-Key': 'test-key'}, 201), ({'X-Api-Key': 'test'}, 401), ({}, 401)]
+)
+
+def test_auth_header(no_header_client, header, expected_status):
+
+    payload = {"device_id": "esp-1", "co2_ppm": 420,  "temperature_c": 19.5, "humidity_pct": 35.0}
+    response = no_header_client.post('/measurements', json=payload, headers=header)
+
+    assert response.status_code == expected_status

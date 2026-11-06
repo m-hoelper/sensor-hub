@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query, Path, Header, Depends
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from typing import Annotated
+import sensor_hub.config as config
+import secrets
 
 class MeasurementIn(BaseModel):
     device_id: str = Field(min_length=1, max_length=50)
@@ -13,14 +15,21 @@ class MeasurementOut(MeasurementIn):
     id: int
     created_at: datetime
 
+app = FastAPI()
+
 MAX_LIMIT = 20
 measurement_data: dict[int, dict] = {}
 next_id = 1
 
-app = FastAPI()
+
+def verify_api_key(settings: Annotated[config.Settings, Depends(config.get_settings)],
+                   x_api_key: Annotated[str | None, Header()] = None) -> None:
+    
+    if x_api_key is None or not secrets.compare_digest(x_api_key, settings.api_key.get_secret_value()):
+        raise HTTPException(401, 'Authentification failed')
 
 @app.post('/measurements', status_code=201)
-def create_measurement(data: MeasurementIn) -> MeasurementOut:
+def create_measurement(data: MeasurementIn, user: Annotated[None, Depends(verify_api_key)]) -> MeasurementOut:
     global next_id
     
     record = {
@@ -84,7 +93,7 @@ def get_measurement_by_id(measurement_id: Annotated[int, Path(ge=1)]) -> Measure
 
     return MeasurementOut(**measurement_data[measurement_id])
 
-@app.delete('/measurements/{measurement_id}', status_code=204)
+@app.delete('/measurements/{measurement_id}', status_code=204, dependencies=[Depends(verify_api_key)])
 def delete_measurement(measurement_id: Annotated[int, Path(ge= 1)]) -> None:
 
     if measurement_id not in measurement_data:

@@ -1,10 +1,26 @@
 import pytest
 from fastapi.testclient import TestClient
 import sensor_hub.main as main
+import sensor_hub.config as config
+
+def get_test_settings() -> config.Settings:
+    return config.Settings(api_key='test-key')
 
 @pytest.fixture()
 def client():
-    return TestClient(main.app)
+    main.app.dependency_overrides[config.get_settings] = get_test_settings
+
+    yield TestClient(main.app, headers={'X-Api-Key': 'test-key'})
+    
+    main.app.dependency_overrides.clear()
+
+@pytest.fixture()
+def no_header_client():
+    main.app.dependency_overrides[config.get_settings] = get_test_settings
+    
+    yield TestClient(main.app)
+
+    main.app.dependency_overrides.clear()
 
 @pytest.fixture(autouse=True)
 def reset_states():

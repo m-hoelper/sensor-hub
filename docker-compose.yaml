@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: sensor
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: sensorhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sensor -d sensorhub"]
+      interval: 5s
+      retries: 5
+
+volumes:
+  pgdata:

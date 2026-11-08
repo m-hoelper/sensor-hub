@@ -68,7 +68,7 @@ def test_seed_data(client, seed_measurements):
     response = client.get('/measurements/?limit=2')
     body = response.json()
 
-    co2 = [1420, 1490]
+    co2 = [1490, 1420]
 
     for i,n in enumerate(co2):
         assert n == body[i]['co2_ppm']
@@ -134,3 +134,15 @@ def test_auth_header(no_header_client, header, expected_status):
     response = no_header_client.post('/measurements', json=payload, headers=header)
 
     assert response.status_code == expected_status
+
+def test_get_co2_stats(client, seed_measurements):
+
+    response = client.get('/measurements/stats?device_id=esp-1')
+    body = response.json()
+
+    status = {'count': 4, 'max_co2': 1340, 'min_co2': 420, 'avg_co2': 897.5}
+
+    for s in status: 
+        assert body[s] == status[s]
+
+

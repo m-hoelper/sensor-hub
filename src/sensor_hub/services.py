@@ -1,8 +1,8 @@
 from sqlalchemy import Row
 from sqlalchemy.orm import Session
-from sensor_hub.repositories import MeasurementRepository
-from sensor_hub.schemas import MeasurementIn
-from sensor_hub.models import Measurement
+from sensor_hub.repositories import MeasurementRepository, SettingsRepository, NotificationRepository
+from sensor_hub.schemas import MeasurementIn, ThresholdsIn, ThresholdsPatch, ThresholdsOut
+from sensor_hub.models import Measurement, ThresholdSettings, Notification
 from datetime import datetime
 import logging
 
@@ -42,3 +42,37 @@ class MeasurementService:
 
     def get_co2_stats(self, device_id: str | None, start: datetime | None, end: datetime | None) -> Row:
         return self.repo.get_co2_stats(device_id, start, end)
+
+class SettingsService:
+    def __init__(self, db: Session):
+        self.db = db
+        self.repo = SettingsRepository(db)
+
+    def get(self) -> ThresholdSettings:
+        return self.repo.get()
+
+    def replace(self, data: ThresholdsIn) -> ThresholdSettings:
+        settings = self.repo.update(data.model_dump())
+        self.db.commit()
+        logger.info("threshold settings updated: %s", data.model_dump())
+
+        return settings
+
+    def patch(self, patch: ThresholdsPatch) -> ThresholdSettings:
+        current = ThresholdsOut.model_validate(self.get()).model_dump()
+        changes = patch.model_dump(exclude_unset=True)
+        current.update(changes)
+        data = ThresholdsIn(**current)
+
+        settings = self.replace(data)
+
+        return settings
+
+class NotificationService():
+    def __init__(self, db: Session):
+        self.db = db 
+        self.repo = NotificationRepository(db)
+
+    def find(self, limit: int, offset: int) -> list[Notification]:
+        return self.repo.find(limit, offset)
+

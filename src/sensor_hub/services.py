@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from sensor_hub.repositories import MeasurementRepository, SettingsRepository, NotificationRepository
 from sensor_hub.schemas import MeasurementIn, ThresholdsIn, ThresholdsPatch, ThresholdsOut
 from sensor_hub.models import Measurement, ThresholdSettings, Notification
-from datetime import datetime
+from datetime import datetime, timezone
+from sensor_hub.rules import run_window_recommendation, build_message
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,9 +13,22 @@ class MeasurementService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = MeasurementRepository(db)
+        self.settings_repo = SettingsRepository(db)
+        self.notification_repo = NotificationRepository(db)
 
     def create_measurement(self, data: MeasurementIn) -> Measurement:
+
         measurement = self.repo.add(data.model_dump())
+
+        settings = self.settings_repo.get()
+        notification = self.notification_repo.latest()
+
+        new_state = run_window_recommendation(data, settings, notification, datetime.now(timezone.utc))
+
+        if new_state is not None:
+            message = build_message(new_state, data, settings)
+            self.notification_repo.add(new_state, message, measurement.id)
+
         self.db.commit()
         logger.info("created measurement id=%s device=%s co2=%s",
                     measurement.id, measurement.device_id, measurement.co2_ppm)

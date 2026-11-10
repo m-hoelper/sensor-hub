@@ -22,6 +22,7 @@ class StatsOut(BaseModel):
 class ThresholdsIn(BaseModel):
     co2_open_ppm: int = Field(ge=0, le=40_000)
     co2_close_ppm: int = Field(ge=0, le=40_000)
+    co2_max_ppm: int = Field(ge=0, le=40_000)
     humidity_open_pct: float = Field(ge=0, le=100)
     humidity_close_pct: float = Field(ge=0, le=100)
     humidity_min_pct: float = Field(ge=0, le=100)
@@ -31,6 +32,8 @@ class ThresholdsIn(BaseModel):
     def check_thresholds(self):
         if self.co2_close_ppm >= self.co2_open_ppm:
             raise ValueError('co2_close_ppm must be smaller than co2_open_ppm')
+        if self.co2_open_ppm >= self.co2_max_ppm:
+            raise ValueError('co2_open_ppm must be smaller than co2_max_ppm')
         if self.humidity_close_pct >= self.humidity_open_pct:
             raise ValueError('humidity_close_pct must be smaller than humidity_open_pct')
         if self.humidity_min_pct >= self.humidity_close_pct:
@@ -40,6 +43,7 @@ class ThresholdsIn(BaseModel):
 class ThresholdsPatch(BaseModel):
     co2_open_ppm: int | None = Field(ge=0, le=40_000, default=None)
     co2_close_ppm: int | None = Field(ge=0, le=40_000, default=None)
+    co2_max_ppm: int | None = Field(ge=0, le=40_000, default=None)
     humidity_open_pct: float | None = Field(ge=0, le=100, default=None)
     humidity_close_pct: float | None = Field(ge=0, le=100, default=None)
     humidity_min_pct: float | None = Field(ge=0, le=100, default=None)

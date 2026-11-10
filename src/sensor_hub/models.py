@@ -19,6 +19,7 @@ class ThresholdSettings(Base):
     id: Mapped[int] = mapped_column(BIGINT, primary_key=True, server_default='1', autoincrement=False)
     co2_open_ppm: Mapped[int]
     co2_close_ppm: Mapped[int]
+    co2_max_ppm: Mapped[int]
     humidity_open_pct: Mapped[float]
     humidity_close_pct: Mapped[float]
     humidity_min_pct: Mapped[float]

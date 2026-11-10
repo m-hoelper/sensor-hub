@@ -23,6 +23,7 @@ def engine():
 DEFAULT_THRESHOLDS = {
     "co2_open_ppm": 1200,
     "co2_close_ppm": 800,
+    "co2_max_ppm": 2000,
     "humidity_open_pct": 65.0,
     "humidity_close_pct": 55.0,
     "humidity_min_pct": 30.0,
@@ -38,8 +39,8 @@ def db_session(engine):
     
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE measurements, threshold_settings, notifications RESTART IDENTITY"))
-        conn.execute(text("INSERT INTO threshold_settings (co2_open_ppm, co2_close_ppm, humidity_open_pct, humidity_close_pct, humidity_min_pct, cooldown_min) "
-                          "VALUES (:co2_open_ppm, :co2_close_ppm, :humidity_open_pct, :humidity_close_pct, :humidity_min_pct, :cooldown_min)"), DEFAULT_THRESHOLDS)
+        conn.execute(text("INSERT INTO threshold_settings (co2_open_ppm, co2_close_ppm, co2_max_ppm, humidity_open_pct, humidity_close_pct, humidity_min_pct, cooldown_min) "
+                          "VALUES (:co2_open_ppm, :co2_close_ppm, :co2_max_ppm, :humidity_open_pct, :humidity_close_pct, :humidity_min_pct, :cooldown_min)"), DEFAULT_THRESHOLDS)
 
     connection = engine.connect()
     transaction = connection.begin()
@@ -97,15 +98,6 @@ def seed_measurements(client, db_session):
     for payload in SEED_MEASUREMENTS:
         response = client.post('/measurements', json=payload)
         list_responses.append(response.json())
-
-    SEED_NOTIFICATIONS = [
-    {"new_state": "CLOSED", "message": "CO2 420 ppm, humidity 35 %, close the window", "measurement_id": 1},
-    {"new_state": "OPEN_RECOMMENDED", "message": "CO2 1260 ppm >= 1200, open the window", "measurement_id": 7},
-    ]
-
-    notification_repo = NotificationRepository(db_session)
-    for notification in SEED_NOTIFICATIONS:
-        notification_repo.add(**notification)
 
     return list_responses
 

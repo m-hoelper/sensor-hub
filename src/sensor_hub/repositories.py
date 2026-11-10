@@ -107,4 +107,9 @@ class NotificationRepository:
         stmt = stmt.limit(limit).offset(offset)
 
         return list(self.db.execute(stmt).scalars())
+
+    def latest(self) -> Notification | None:
+        latest = self.find(1, 0)
+
+        return latest[0] if latest else None
     

@@ -31,7 +31,10 @@ def reading(co2, humidity):
          (last(OPEN),   800,  55,   CLOSED),   # boundary: both <= close
          (last(OPEN),   1500, 25,   CLOSED),   # too dry, below the hard limit
          (last(OPEN),   2500, 25,   None),     # too dry, but above the hard limit → stay open
-         (last(CLOSED, minutes_ago=5), 2500, 45, None)]
+         (last(OPEN),   1500, 40,   None),     # already open, still high → no repeat
+         (last(CLOSED, minutes_ago=5),  2500, 45, None),   # inside the cooldown
+         (last(CLOSED, minutes_ago=15), 2500, 45, None),   # boundary: exactly cooldown_min still blocks (<=)
+         (last(CLOSED, minutes_ago=16), 2500, 45, OPEN)]   # one minute later it's allowed
 )
 def test_window_recommendation(previous, co2, humidity, expected):
 

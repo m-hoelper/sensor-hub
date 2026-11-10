@@ -47,6 +47,15 @@ def test_cooldown_blocks_state_change(client, seed_measurements):
     assert [n['id'] for n in client.get('/notifications').json()] == [1]
 
 
+def test_still_high_after_cooldown_creates_no_second_open(client, db_session, seed_measurements):
+
+    db_session.execute(text("UPDATE notifications SET created_at = created_at - interval '20 minutes'"))
+
+    client.post('/measurements', json={**LOW_AIR, 'co2_ppm': 1500})
+
+    assert [n['id'] for n in client.get('/notifications').json()] == [1]
+
+
 def test_no_notification_without_state_change(client):
 
     response = client.post('/measurements', json=LOW_AIR)
@@ -98,3 +107,21 @@ def test_get_notifications_invalid_query_returns_422(client, query):
     response = client.get(f'/notifications?{query}')
 
     assert response.status_code == 422
+
+
+def test_state_is_closed_without_notifications(client):
+
+    response = client.get('/notifications/state')
+
+    assert response.status_code == 200
+    assert response.json() == 'CLOSED'
+
+
+def test_state_follows_latest_notification(client, two_notifications):
+
+    assert client.get('/notifications/state').json() == 'CLOSED'
+
+
+def test_state_open_after_seed(client, seed_measurements):
+
+    assert client.get('/notifications/state').json() == 'OPEN_RECOMMENDED'

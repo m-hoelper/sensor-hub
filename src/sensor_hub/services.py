@@ -90,3 +90,6 @@ class NotificationService():
     def find(self, limit: int, offset: int) -> list[Notification]:
         return self.repo.find(limit, offset)
 
+    def latest(self) -> Notification | None:
+        return self.repo.latest()
+

@@ -13,3 +13,14 @@ def find_notifications(
     offset: Annotated[int, Query(ge=0)] = 0) -> list[NotificationOut]:
 
     return service.find(limit, offset)
+
+@router.get('/state')
+def get_latest_state(
+    service: Annotated[NotificationService, Depends(get_notification_service)]) -> str:
+
+    notification = service.latest()
+
+    if notification is None:
+        return 'CLOSED'
+    
+    return notification.new_state

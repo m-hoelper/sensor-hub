@@ -44,8 +44,11 @@ def send_notification(db: Session, send) -> bool:
 def main(send):
     while True:
 
-        with SessionLocal() as db:
+        db = SessionLocal()
+        try:
             processed = send_notification(db, send)
+        finally:
+            db.close()
 
         if not processed:
             time.sleep(5)

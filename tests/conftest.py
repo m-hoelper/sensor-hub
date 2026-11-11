@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import sensor_hub.db as db
 from sqlalchemy import text
 from sensor_hub.repositories import NotificationRepository
+import sensor_hub.cache as cache_module
 
 def get_test_settings() -> config.Settings:
     return config.Settings(api_key='test-key')
@@ -53,27 +54,52 @@ def db_session(engine):
     connection.close()
 
 
+
+class FakeCache:
+    """In-memory stand-in for redis.Redis: only the three commands the service uses."""
+
+    def __init__(self):
+        self.store: dict[str, str] = {}
+        self.ttl: dict[str, int | None] = {}
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def set(self, key, value, ex=None):
+        self.store[key] = value
+        self.ttl[key] = ex
+
+    def delete(self, *keys):
+        return sum(self.store.pop(key, None) is not None for key in keys)
+
+
 @pytest.fixture()
-def client(db_session):
+def cache():
+    return FakeCache()          # fresh per test → nothing leaks between tests
+
+@pytest.fixture()
+def client(db_session, cache):
 
     def get_test_db():
         return db_session
 
     main.app.dependency_overrides[config.get_settings] = get_test_settings
     main.app.dependency_overrides[db.get_db] = get_test_db
+    main.app.dependency_overrides[cache_module.get_cache] = lambda: cache
 
     yield TestClient(main.app, headers={'X-Api-Key': 'test-key'})
     
     main.app.dependency_overrides.clear()
 
 @pytest.fixture()
-def no_header_client(db_session):
+def no_header_client(db_session, cache):
 
     def get_test_db():
         return db_session
 
     main.app.dependency_overrides[config.get_settings] = get_test_settings
     main.app.dependency_overrides[db.get_db] = get_test_db
+    main.app.dependency_overrides[cache_module.get_cache] = lambda: cache
     
     yield TestClient(main.app)
 

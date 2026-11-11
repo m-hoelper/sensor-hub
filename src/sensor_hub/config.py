@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra='ignore')
     api_key: SecretStr
     database_url: SecretStr
+    redis_url: SecretStr
     test_database_url: SecretStr | None = None
 
 @lru_cache                        

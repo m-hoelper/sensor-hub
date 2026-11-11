@@ -24,7 +24,9 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"           # no login: every visitor is an anonymous viewer
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer          # read-only in Grafana (dashboards come from git anyway)
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"          # hide the login page
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"

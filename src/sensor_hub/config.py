@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     database_url: SecretStr
     redis_url: SecretStr
     test_database_url: SecretStr | None = None
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: str | None = None
 
 @lru_cache                        
 def get_settings() -> Settings:

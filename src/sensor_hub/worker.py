@@ -5,6 +5,8 @@ from sensor_hub.models import Notification
 from datetime import datetime, timezone
 from sensor_hub.db import SessionLocal
 import time
+from sensor_hub.config import Settings, get_settings
+from sensor_hub.telegram import make_telegram_sender
 
 MAX_ATTEMPTS = 5
 logger = logging.getLogger(__name__)
@@ -54,6 +56,16 @@ def main(send):
             time.sleep(5)
 
 
+def choose_sender(settings: Settings):
+    if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
+        logger.info("Telegram not configured, notifications are only logged")
+        return log_send
+
+    logger.info("sending notifications to Telegram")
+    return make_telegram_sender(settings.telegram_bot_token.get_secret_value(), settings.telegram_chat_id)
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    main(send=log_send)
+    logging.getLogger('httpx').setLevel(logging.WARNING)      # httpx logs every request URL at INFO = the bot token
+    main(send=choose_sender(get_settings()))

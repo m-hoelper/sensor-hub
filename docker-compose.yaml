@@ -1,5 +1,4 @@
 services:
-
   db:
     image: postgres:17
     environment:
@@ -7,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: sensorhub
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +28,7 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-      DB_PASSWORD: ${DB_PASSWORD}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD}     # read-only role, created by scripts/create_grafana_role.sh
     volumes:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro

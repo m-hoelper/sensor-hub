@@ -5,7 +5,7 @@ datasources:
     uid: sensorhub-pg
     type: grafana-postgresql-datasource
     url: db:5432
-    user: sensor
+    user: grafana_reader                # read-only role (SELECT only, no last_error)
     isDefault: true
     jsonData:
       database: sensorhub
@@ -13,4 +13,4 @@ datasources:
       postgresVersion: 1700
       timescaledb: false
     secureJsonData:
-      password: ${DB_PASSWORD}          # from the container environment, set by compose from .env
+      password: ${GRAFANA_DB_PASSWORD}  # from the container environment, set by compose from .env

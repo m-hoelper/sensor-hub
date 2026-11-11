@@ -35,9 +35,9 @@
   },
   "panels": [
     {
-      "id": 1,
+      "id": 3,
       "type": "timeseries",
-      "title": "CO₂",
+      "title": "Temperature",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "sensorhub-pg"
@@ -58,24 +58,13 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT created_at AS \"time\", device_id AS metric, co2_ppm AS value\nFROM measurements\nWHERE $__timeFilter(created_at)\nORDER BY 1"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "sensorhub-pg"
-          },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", co2_open_ppm AS \"open limit\", co2_close_ppm AS \"close limit\" FROM threshold_settings\nUNION ALL\nSELECT $__timeTo()::timestamptz, co2_open_ppm, co2_close_ppm FROM threshold_settings\nORDER BY 1"
+          "rawSql": "SELECT created_at AS \"time\", device_id AS metric, temperature_c AS value\nFROM measurements\nWHERE $__timeFilter(created_at)\nORDER BY 1"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ppm",
-          "decimals": 0,
+          "unit": "celsius",
+          "decimals": 1,
           "custom": {
             "lineWidth": 2,
             "showPoints": "never",
@@ -235,9 +224,9 @@
       }
     },
     {
-      "id": 3,
+      "id": 1,
       "type": "timeseries",
-      "title": "Temperature",
+      "title": "CO₂",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "sensorhub-pg"
@@ -258,13 +247,24 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT created_at AS \"time\", device_id AS metric, temperature_c AS value\nFROM measurements\nWHERE $__timeFilter(created_at)\nORDER BY 1"
+          "rawSql": "SELECT created_at AS \"time\", device_id AS metric, co2_ppm AS value\nFROM measurements\nWHERE $__timeFilter(created_at)\nORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "sensorhub-pg"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeFrom()::timestamptz AS \"time\", co2_open_ppm AS \"open limit\", co2_close_ppm AS \"close limit\" FROM threshold_settings\nUNION ALL\nSELECT $__timeTo()::timestamptz, co2_open_ppm, co2_close_ppm FROM threshold_settings\nORDER BY 1"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "celsius",
-          "decimals": 1,
+          "unit": "ppm",
+          "decimals": 0,
           "custom": {
             "lineWidth": 2,
             "showPoints": "never",

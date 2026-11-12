@@ -69,7 +69,6 @@ void loop() {
     if (!warmedUp && now >= WARMUP_MS) {
         warmedUp = true;
         lastWindowMs = now;
-        lastMeasureMs = now;
     }
 
     if (now - lastTimeMs >= PRINT_INTERVAL_MS) {

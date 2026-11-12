@@ -7,9 +7,10 @@ void setup() {
 
     Serial.begin(115200);
     while (!Serial && millis() < 3000) {}
+    delay(2000);
     
     rgbLedWrite(RGB_BUILTIN, 0, 0, 0);
-    sleep(2);
+
     Serial.printf("flash: %lu bytes\n", ESP.getFlashChipSize());
     Serial.printf("psram: %lu bytes\n", ESP.getPsramSize());
     

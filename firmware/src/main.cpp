@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include "secrets.h"
 #include <time.h>
+#include <LittleFS.h>
 
 const uint8_t SDA_PIN = 8;
 const uint8_t SCL_PIN = 9;
@@ -31,6 +32,12 @@ bool warmedUp = false;
 uint16_t co2 = 0;
 float temp = 0.0;
 float humidity = 0.0;
+
+const time_t MIN_VALID_TIME = 1700000000;
+
+bool timeIsValid() {
+    return time(nullptr) >= MIN_VALID_TIME;
+}
 
 void setup() {
 
@@ -84,12 +91,16 @@ void setup() {
     configTime(0, 0, "pool.ntp.org");
 
     uint32_t ntpStart = millis();
-    while (time(nullptr) < 1700000000 and millis() - ntpStart < 10000) {
+    while (!timeIsValid() and millis() - ntpStart < 10000) {
         delay(250);
         Serial.print(".");
     }
     Serial.println();
     Serial.printf("now: %lld\n", (long long)time(nullptr));
+
+    bool fsMounted = LittleFS.begin(true);
+    Serial.printf("LittleFS: %s\n", fsMounted ? "mounted" : "FAILED");
+
     
 }
 
@@ -136,12 +147,19 @@ void loop() {
     if (now - lastWindowMs >= WINDOW_MS && warmedUp){
         lastWindowMs = now;
         
-        if (sampleCount > 0) {
-            uint16_t co2Avg = co2Sum / sampleCount;
-            float tempAvg = tempSum / sampleCount;
-            float humAvg  = humSum / sampleCount;
+        if (sampleCount > 0 && timeIsValid()) {
+            const uint16_t co2Avg = co2Sum / sampleCount;
+            const float tempAvg = tempSum / sampleCount;
+            const float humAvg  = humSum / sampleCount;
 
-            Serial.printf("avg (%u): CO2 %u ppm, T %.1f C, RH %.1f %%\n", sampleCount, co2Avg, tempAvg, humAvg);
+            struct tm t;
+            char createdAt[25];
+            const time_t nowUtc = time(nullptr);
+
+            gmtime_r(&nowUtc, &t);
+            strftime(createdAt, sizeof(createdAt), "%Y-%m-%dT%H:%M:%SZ", &t);
+
+            Serial.printf("avg (%u): CO2 %u ppm, T %.1f C, RH %.1f %%, created at: %s\n", sampleCount, co2Avg, tempAvg, humAvg, createdAt);
         }
         co2Sum = 0;
         tempSum = 0.0;

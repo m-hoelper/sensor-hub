@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SensirionI2cScd4x.h>
+#include <WiFi.h>
+#include "secrets.h"
 
 const uint8_t SDA_PIN = 8;
 const uint8_t SCL_PIN = 9;
@@ -59,6 +61,23 @@ void setup() {
     int16_t err = sensor.startPeriodicMeasurement();
     if (err != 0) {
     Serial.printf("start failed: %d\n", err);
+    }
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    uint32_t WifiStart = millis();
+
+    while (WiFi.status() != WL_CONNECTED and millis() - WifiStart < 15000) {
+        delay(250);
+        Serial.print(".");
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("RSSI: %d\n", WiFi.RSSI());
+    } else {
+        Serial.printf("Wi-Fi failed, status %d\n", WiFi.status());
     }
     
 }

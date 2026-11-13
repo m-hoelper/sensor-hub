@@ -39,6 +39,43 @@ bool timeIsValid() {
     return time(nullptr) >= MIN_VALID_TIME;
 }
 
+struct Record {
+    uint32_t epoch;
+    uint16_t co2;
+    int16_t temp100;
+    uint16_t hum100;
+    uint8_t spare[6];
+};
+
+struct Header {
+    uint32_t readIdx;
+    uint32_t writeIdx;
+    uint32_t count;
+};
+
+#ifndef __INTELLISENSE__
+static_assert(sizeof(Record) == 16, "Record must be 16 bytes");
+#endif
+const uint32_t CAPACITY = 20160;
+Header hdr;
+
+void saveHeader() {
+    File f = LittleFS.open("/hdr.bin", "w");
+    if (!f) {return;}
+    f.write((const uint8_t*)&hdr, sizeof(hdr));
+    f.close();
+}
+void loadHeader() {
+    if (!LittleFS.exists("/hdr.bin")) {
+        saveHeader();
+        return;
+    }
+    File f = LittleFS.open("/hdr.bin", "r");
+    if (!f) {return;}
+    f.read((uint8_t*)&hdr, sizeof(hdr));
+    f.close();
+}
+
 void setup() {
 
     Serial.begin(115200);
@@ -101,7 +138,10 @@ void setup() {
     bool fsMounted = LittleFS.begin(true);
     Serial.printf("LittleFS: %s\n", fsMounted ? "mounted" : "FAILED");
 
-    
+    if (fsMounted) {
+        loadHeader();
+        Serial.printf("hdr: read %lu, write %lu, count %lu\n", hdr.readIdx, hdr.writeIdx, hdr.count);
+    }
 }
 
 void loop() {

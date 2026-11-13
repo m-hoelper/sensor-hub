@@ -3,6 +3,7 @@
 #include <SensirionI2cScd4x.h>
 #include <WiFi.h>
 #include "secrets.h"
+#include <time.h>
 
 const uint8_t SDA_PIN = 8;
 const uint8_t SCL_PIN = 9;
@@ -67,11 +68,11 @@ void setup() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     uint32_t WifiStart = millis();
-
     while (WiFi.status() != WL_CONNECTED and millis() - WifiStart < 15000) {
         delay(250);
         Serial.print(".");
     }
+    Serial.println();
 
     if (WiFi.status() == WL_CONNECTED) {
         Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
@@ -79,6 +80,16 @@ void setup() {
     } else {
         Serial.printf("Wi-Fi failed, status %d\n", WiFi.status());
     }
+
+    configTime(0, 0, "pool.ntp.org");
+
+    uint32_t ntpStart = millis();
+    while (time(nullptr) < 1700000000 and millis() - ntpStart < 10000) {
+        delay(250);
+        Serial.print(".");
+    }
+    Serial.println();
+    Serial.printf("now: %lld\n", (long long)time(nullptr));
     
 }
 

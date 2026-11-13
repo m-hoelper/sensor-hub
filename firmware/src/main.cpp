@@ -65,6 +65,7 @@ void saveHeader() {
     f.write((const uint8_t*)&hdr, sizeof(hdr));
     f.close();
 }
+
 void loadHeader() {
     if (!LittleFS.exists("/hdr.bin")) {
         saveHeader();
@@ -74,6 +75,30 @@ void loadHeader() {
     if (!f) {return;}
     f.read((uint8_t*)&hdr, sizeof(hdr));
     f.close();
+}
+
+void appendRecord(const Record& r) {
+    File f;
+    if (!LittleFS.exists("/buf.bin")) {
+        f = LittleFS.open("/buf.bin", "w");
+    } else {
+        f = LittleFS.open("/buf.bin", "r+");
+    }
+    if (!f) {return;}
+
+    f.seek(hdr.writeIdx * sizeof(r));
+    f.write((const uint8_t*)&r, sizeof(r));
+    f.close();
+
+    hdr.writeIdx = (hdr.writeIdx + 1) % CAPACITY;
+
+    if (hdr.count < CAPACITY) {
+        hdr.count += 1;
+    } else {
+        hdr.readIdx = (hdr.readIdx + 1) % CAPACITY;
+    }
+
+    saveHeader();
 }
 
 void setup() {
@@ -200,6 +225,15 @@ void loop() {
             strftime(createdAt, sizeof(createdAt), "%Y-%m-%dT%H:%M:%SZ", &t);
 
             Serial.printf("avg (%u): CO2 %u ppm, T %.1f C, RH %.1f %%, created at: %s\n", sampleCount, co2Avg, tempAvg, humAvg, createdAt);
+
+            Record r = {};
+            r.co2 = co2Avg;
+            r.temp100 = lroundf(tempAvg * 100);
+            r.hum100 = lroundf(humAvg * 100);
+            r.epoch = nowUtc;
+
+            appendRecord(r);
+            Serial.printf("stored: write %lu, count %lu\n", hdr.writeIdx, hdr.count);
         }
         co2Sum = 0;
         tempSum = 0.0;

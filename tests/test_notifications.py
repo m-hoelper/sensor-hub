@@ -1,5 +1,6 @@
 import pytest
 from sqlalchemy import text
+from conftest import batch_of
 
 LOW_AIR = {"device_id": "esp-1", "co2_ppm": 700, "temperature_c": 20.5, "humidity_pct": 45.0}
 
@@ -9,8 +10,9 @@ def two_notifications(client, db_session, seed_measurements):
 
     db_session.execute(text("UPDATE notifications SET created_at = created_at - interval '20 minutes'"))
 
-    response = client.post('/measurements', json=LOW_AIR)
-    return response.json()
+    response = client.post('/measurements', json=batch_of(LOW_AIR))
+    assert response.status_code == 201
+    return 11                       # id of the LOW_AIR measurement (seed = ids 1–10)
 
 
 def test_seed_creates_one_notification_with_nested_measurement(client, seed_measurements):
@@ -36,13 +38,13 @@ def test_low_air_after_cooldown_closes(client, two_notifications):
 
     assert [n['id'] for n in body] == [2, 1]  
     assert [n['new_state'] for n in body] == ['CLOSED', 'OPEN_RECOMMENDED']
-    assert body[0]['measurement']['id'] == two_notifications['id']
+    assert body[0]['measurement']['id'] == two_notifications
     assert body[0]['message'].startswith('Close the window')
 
 
 def test_cooldown_blocks_state_change(client, seed_measurements):
 
-    client.post('/measurements', json=LOW_AIR)
+    client.post('/measurements', json=batch_of(LOW_AIR))
 
     assert [n['id'] for n in client.get('/notifications').json()] == [1]
 
@@ -51,14 +53,14 @@ def test_still_high_after_cooldown_creates_no_second_open(client, db_session, se
 
     db_session.execute(text("UPDATE notifications SET created_at = created_at - interval '20 minutes'"))
 
-    client.post('/measurements', json={**LOW_AIR, 'co2_ppm': 1500})
+    client.post('/measurements', json=batch_of({**LOW_AIR, 'co2_ppm': 1500}))
 
     assert [n['id'] for n in client.get('/notifications').json()] == [1]
 
 
 def test_no_notification_without_state_change(client):
 
-    response = client.post('/measurements', json=LOW_AIR)
+    response = client.post('/measurements', json=batch_of(LOW_AIR))
 
     assert response.status_code == 201
     assert client.get('/notifications').json() == []

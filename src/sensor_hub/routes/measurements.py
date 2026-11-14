@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from typing import Annotated
-from sensor_hub.schemas import MeasurementIn, MeasurementOut, StatsOut
+from sensor_hub.schemas import MeasurementBatchIn, MeasurementOut, StatsOut, BatchResult
 from sensor_hub.services import MeasurementService
 from datetime import datetime
 from sensor_hub.dependencies import verify_api_key, get_measurement_service
@@ -9,10 +9,10 @@ router = APIRouter(prefix="/measurements", tags=["measurements"])
 
 @router.post('', status_code=201, dependencies=[Depends(verify_api_key)])
 def create_measurement(
-    data: MeasurementIn,
-    service: Annotated[MeasurementService, Depends(get_measurement_service)]) -> MeasurementOut:
+    batch: MeasurementBatchIn,
+    service: Annotated[MeasurementService, Depends(get_measurement_service)]) -> BatchResult:
 
-    return service.create_measurement(data)
+    return service.create_measurement(batch)
 
 @router.get('', status_code=200)
 def get_measurements(

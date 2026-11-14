@@ -1,17 +1,27 @@
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, model_validator, AwareDatetime
 from datetime import datetime
+from typing import Annotated
 
-class MeasurementIn(BaseModel):
-    device_id: str = Field(min_length=1, max_length=50)
-    co2_ppm: int = Field(ge=0, le=40_000)
-    temperature_c: float = Field(ge=-10, le=60)
-    humidity_pct: float = Field(ge=0, le=100)
+class MeasurementItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    co2_ppm: Annotated[int, Field(ge=0, le=40_000)]
+    temperature_c: Annotated[float, Field(ge=-10, le=60)]
+    humidity_pct: Annotated[float, Field(ge=0, le=100)]
+    created_at: AwareDatetime
 
-class MeasurementOut(MeasurementIn):
+class MeasurementOut(MeasurementItem):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
+    device_id: Annotated[str, Field(min_length=1, max_length=50)]
 
+class MeasurementBatchIn(BaseModel):
+    device_id: Annotated[str, Field(min_length=1, max_length=50)]
+    measurements: Annotated[list[MeasurementItem], Field(min_length=1, max_length=500)]
+
+class BatchResult(BaseModel):
+    inserted: int
+    duplicates: int
+    
 class StatsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     count: int
@@ -20,13 +30,14 @@ class StatsOut(BaseModel):
     min_co2: int | None = None
 
 class ThresholdsIn(BaseModel):
-    co2_open_ppm: int = Field(ge=0, le=40_000)
-    co2_close_ppm: int = Field(ge=0, le=40_000)
-    co2_max_ppm: int = Field(ge=0, le=40_000)
-    humidity_open_pct: float = Field(ge=0, le=100)
-    humidity_close_pct: float = Field(ge=0, le=100)
-    humidity_min_pct: float = Field(ge=0, le=100)
-    cooldown_min: int = Field(ge=1)
+    co2_open_ppm: Annotated[int, Field(ge=0, le=40_000)]
+    co2_close_ppm: Annotated[int, Field(ge=0, le=40_000)]
+    co2_max_ppm: Annotated[int, Field(ge=0, le=40_000)]
+    humidity_open_pct: Annotated[float, Field(ge=0, le=100)]
+    humidity_close_pct: Annotated[float, Field(ge=0, le=100)]
+    humidity_min_pct: Annotated[float, Field(ge=0, le=100)]
+    cooldown_min: Annotated[int, Field(ge=1)]
+    ignore_measurements_older_than_min: Annotated[int, Field(ge=1, le=60)]
 
     @model_validator(mode="after")
     def check_thresholds(self):
@@ -41,13 +52,14 @@ class ThresholdsIn(BaseModel):
         return self
 
 class ThresholdsPatch(BaseModel):
-    co2_open_ppm: int | None = Field(ge=0, le=40_000, default=None)
-    co2_close_ppm: int | None = Field(ge=0, le=40_000, default=None)
-    co2_max_ppm: int | None = Field(ge=0, le=40_000, default=None)
-    humidity_open_pct: float | None = Field(ge=0, le=100, default=None)
-    humidity_close_pct: float | None = Field(ge=0, le=100, default=None)
-    humidity_min_pct: float | None = Field(ge=0, le=100, default=None)
-    cooldown_min: int | None = Field(ge=1, default=None)
+    co2_open_ppm: Annotated[int | None, Field(ge=0, le=40_000)] = None
+    co2_close_ppm: Annotated[int | None, Field(ge=0, le=40_000)] = None
+    co2_max_ppm: Annotated[int | None, Field(ge=0, le=40_000)] = None
+    humidity_open_pct: Annotated[float | None, Field(ge=0, le=100)] = None
+    humidity_close_pct: Annotated[float | None, Field(ge=0, le=100)] = None
+    humidity_min_pct: Annotated[float | None, Field(ge=0, le=100)] = None
+    cooldown_min: Annotated[int | None, Field(ge=1)] = None
+    ignore_measurements_older_than_min: Annotated[int | None, Field(ge=1, le=60)] = None
 
 class ThresholdsOut(ThresholdsIn):
     model_config = ConfigDict(from_attributes=True)
@@ -61,6 +73,3 @@ class NotificationOut(BaseModel):
     created_at: datetime
     sent_at: datetime | None = None
     attempts: int
-
-
-

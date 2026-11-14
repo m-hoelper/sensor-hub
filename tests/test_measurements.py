@@ -1,23 +1,7 @@
 import pytest
-
-def test_create_measurement_returns_201_with_id(client):
-
-    payload = {
-        'device_id': 'esp-2',
-        'co2_ppm': 1500,
-        'temperature_c': 26.0,
-        'humidity_pct': 30.0,
-    }
-
-    response = client.post('/measurements', json= payload)
-    body = response.json()
-
-    assert response.status_code == 201
-
-    assert 'id' in body
-    assert 'created_at' in body 
-    for c in payload:
-        assert payload[c] == body[c]
+from datetime import datetime, timedelta, timezone
+from conftest import batch_of
+from sqlalchemy import text
 
 def test_get_empty_mesurement_data(client):
 
@@ -94,7 +78,7 @@ def test_create_measurement_invalid_field_returns_422(client, field, value):
 
     payload[field] = value
 
-    response = client.post('/measurements/', json= payload)
+    response = client.post('/measurements', json=batch_of(payload))
 
     assert response.status_code == 422
 
@@ -131,7 +115,7 @@ def test_get_measurements_with_offset_and_limit(client, seed_measurements, offse
 def test_auth_header(no_header_client, header, expected_status):
 
     payload = {"device_id": "esp-1", "co2_ppm": 420,  "temperature_c": 19.5, "humidity_pct": 35.0}
-    response = no_header_client.post('/measurements', json=payload, headers=header)
+    response = no_header_client.post('/measurements', json=batch_of(payload), headers=header)
 
     assert response.status_code == expected_status
 
@@ -146,3 +130,142 @@ def test_get_co2_stats(client, seed_measurements):
         assert body[s] == status[s]
 
 
+
+
+# ---------------------------------------------------------------------------
+# POST /measurements: one batch of 1–500 readings from one device (step 11e)
+# ---------------------------------------------------------------------------
+
+NOW = datetime.now(timezone.utc)
+VALUES = {'co2_ppm': 600, 'temperature_c': 21.0, 'humidity_pct': 45.0}
+
+
+def reading(seconds_ago: float = 0, **overrides) -> dict:
+    return {**VALUES, 'created_at': (NOW - timedelta(seconds=seconds_ago)).isoformat(), **overrides}
+
+def batch(*readings, device_id='esp-1') -> dict:
+    return {'device_id': device_id, 'measurements': list(readings)}
+
+def count_rows(client, device_id='esp-1') -> int:
+    return client.get(f'/measurements/stats?device_id={device_id}').json()['count']
+
+
+def test_post_batch_returns_counts_and_stores_device_time(client):
+
+    sent = batch(reading(seconds_ago=60), reading(seconds_ago=30, co2_ppm=650))
+
+    response = client.post('/measurements', json=sent)
+
+    assert response.status_code == 201
+    assert response.json() == {'inserted': 2, 'duplicates': 0}
+
+    latest = client.get('/measurements/latest?device_id=esp-1').json()
+    assert latest['co2_ppm'] == 650
+    assert latest['device_id'] == 'esp-1'
+    assert datetime.fromisoformat(latest['created_at']) == NOW - timedelta(seconds=30)   # device time, not server time
+
+
+def test_resent_batch_counts_duplicates_and_stores_nothing(client):
+
+    sent = batch(reading(seconds_ago=60), reading(seconds_ago=30))
+
+    client.post('/measurements', json=sent)
+    response = client.post('/measurements', json=sent)            # lost 201 → the ESP32 sends the same chunk again
+
+    assert response.status_code == 201                            # still success, so the device drops the chunk
+    assert response.json() == {'inserted': 0, 'duplicates': 2}
+    assert count_rows(client) == 2
+
+
+def test_partly_known_batch_inserts_only_new_readings(client):
+
+    client.post('/measurements', json=batch(reading(seconds_ago=60)))
+
+    response = client.post('/measurements', json=batch(reading(seconds_ago=60), reading(seconds_ago=30)))
+
+    assert response.json() == {'inserted': 1, 'duplicates': 1}
+    assert count_rows(client) == 2
+
+
+def test_same_time_on_another_device_is_not_a_duplicate(client):
+
+    client.post('/measurements', json=batch(reading(seconds_ago=30), device_id='esp-1'))
+    response = client.post('/measurements', json=batch(reading(seconds_ago=30), device_id='esp-2'))
+
+    assert response.json() == {'inserted': 1, 'duplicates': 0}
+
+
+def test_epoch_seconds_from_the_esp32_are_accepted_as_utc(client):
+
+    epoch = int(NOW.timestamp())
+
+    response = client.post('/measurements', json=batch({**VALUES, 'created_at': epoch}))
+
+    assert response.status_code == 201
+    latest = client.get('/measurements/latest').json()
+    assert datetime.fromisoformat(latest['created_at']) == datetime.fromtimestamp(epoch, timezone.utc)
+
+
+def test_500_readings_are_accepted(client):
+
+    response = client.post('/measurements', json=batch(*[reading(seconds_ago=30 * i) for i in range(500)]))
+
+    assert response.status_code == 201
+    assert response.json() == {'inserted': 500, 'duplicates': 0}
+
+
+@pytest.mark.parametrize(
+        'body',
+        [batch(),                                                          # empty list
+         batch(*[reading(seconds_ago=30 * i) for i in range(501)]),        # one over the limit
+         batch(reading(created_at='2026-11-14T12:00:00')),                 # naive time → ambiguous
+         batch({**VALUES}),                                                # created_at missing
+         {'measurements': [reading()]},                                    # device_id missing
+         {'device_id': 'esp-1', 'measurements': reading()}]                # a single object, not a list
+)
+def test_invalid_batch_returns_422_and_stores_nothing(client, body):
+
+    response = client.post('/measurements', json=body)
+
+    assert response.status_code == 422
+    assert client.get('/measurements').json() == []
+
+
+def test_backfilled_old_reading_does_not_become_latest(client, seed_measurements):
+
+    client.post('/measurements', json=batch(reading(seconds_ago=3600), device_id='esp-3'))   # gets id 11 …
+
+    latest = client.get('/measurements/latest').json()
+    assert latest['id'] == 10                                                                 # … but is older
+
+
+def test_backfill_never_creates_a_notification(client):
+
+    old_and_high = batch(*[reading(seconds_ago=3600 + 30 * i, co2_ppm=2500) for i in range(10)])
+
+    response = client.post('/measurements', json=old_and_high)
+
+    assert response.json()['inserted'] == 10
+    assert client.get('/notifications').json() == []
+
+
+def test_rules_judge_only_the_newest_reading_of_a_batch(client):
+
+    # an old spike, then fresh air: only the newest reading describes the room now
+    response = client.post('/measurements', json=batch(reading(seconds_ago=60, co2_ppm=2500),
+                                                       reading(seconds_ago=0, co2_ppm=500)))
+
+    assert response.status_code == 201
+    assert client.get('/notifications').json() == []
+
+
+def test_resend_does_not_create_a_second_notification(client, db_session):
+
+    high = batch(reading(seconds_ago=0, co2_ppm=2500))
+
+    client.post('/measurements', json=high)
+    db_session.execute(text("UPDATE notifications SET created_at = created_at - interval '20 minutes'"))  # past the cooldown
+    client.post('/measurements', json=high)
+
+    notifications = client.get('/notifications').json()
+    assert [n['new_state'] for n in notifications] == ['OPEN_RECOMMENDED']

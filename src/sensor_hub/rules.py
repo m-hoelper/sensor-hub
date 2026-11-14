@@ -1,6 +1,9 @@
-from sensor_hub.schemas import MeasurementIn, ThresholdsOut, NotificationOut
+from sensor_hub.schemas import MeasurementItem, ThresholdsOut, NotificationOut
 from datetime import datetime, timedelta
-def run_window_recommendation(m: MeasurementIn, s: ThresholdsOut, n: NotificationOut | None, now: datetime) -> str | None:
+def run_window_recommendation(m: MeasurementItem, s: ThresholdsOut, n: NotificationOut | None, now: datetime) -> str | None:
+    if now - m.created_at > timedelta(minutes=s.ignore_measurements_older_than_min):
+        return None
+
     if n is not None and now - n.created_at <= timedelta(minutes=s.cooldown_min):
         return None
 
@@ -15,7 +18,7 @@ def run_window_recommendation(m: MeasurementIn, s: ThresholdsOut, n: Notificatio
     return None
 
 
-def build_message(new_state: str, m: MeasurementIn, s: ThresholdsOut) -> str:
+def build_message(new_state: str, m: MeasurementItem, s: ThresholdsOut) -> str:
     
     values = f"CO2 {m.co2_ppm} ppm, humidity {m.humidity_pct:.0f} %"
 

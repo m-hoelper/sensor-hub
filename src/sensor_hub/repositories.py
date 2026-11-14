@@ -2,18 +2,20 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, Row, func
 from sensor_hub.models import Measurement, ThresholdSettings, Notification
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import insert 
 
 class MeasurementRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def add(self, data: dict) -> Measurement:
-        measurement = Measurement(**data)
+    def add_many(self, device_id: str, items: list[dict]) -> list[Measurement]:
+        rows = [{**item, 'device_id': device_id} for item in items]
 
-        self.db.add(measurement)
-        self.db.flush()
+        stmt = insert(Measurement).values(rows)
+        stmt = stmt.on_conflict_do_nothing(constraint='uq_measurements_device_created')
+        stmt = stmt.returning(Measurement)
 
-        return measurement
+        return list(self.db.execute(stmt).scalars())
 
     def get(self, measurement_id: int) -> Measurement | None:
         stmt = select(Measurement)

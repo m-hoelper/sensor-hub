@@ -4,8 +4,9 @@ from sqlalchemy import text
 import sensor_hub.cache as cache_module
 import sensor_hub.main as main
 from sensor_hub.services import TTL_SECONDS, newest_key
+from conftest import batch_of
 
-# seed_measurements: latest overall = id 10 (esp-3), esp-1 = id 8, esp-2 = id 9
+# seed_measurements: latest overall = id 10 (esp-3), esp-1 = id 8, esp-2 = id 9; the next insert gets id 11
 NEW_ESP1 = {"device_id": "esp-1", "co2_ppm": 600, "temperature_c": 21.0, "humidity_pct": 45.0}
 
 
@@ -47,7 +48,8 @@ def test_post_invalidates_only_affected_keys(client, cache, seed_measurements):
     client.get('/measurements/latest?device_id=esp-1')
     client.get('/measurements/latest?device_id=esp-2')
 
-    new_id = client.post('/measurements', json=NEW_ESP1).json()['id']
+    assert client.post('/measurements', json=batch_of(NEW_ESP1)).status_code == 201
+    new_id = 11
 
     assert newest_key(None) not in cache.store
     assert newest_key('esp-1') not in cache.store
@@ -76,7 +78,7 @@ def test_not_found_is_not_cached(client, cache, seed_measurements):
     assert client.get('/measurements/latest?device_id=esp-9').status_code == 404
     assert newest_key('esp-9') not in cache.store
 
-    client.post('/measurements', json={**NEW_ESP1, 'device_id': 'esp-9'})
+    client.post('/measurements', json=batch_of({**NEW_ESP1, 'device_id': 'esp-9'}))
 
     assert client.get('/measurements/latest?device_id=esp-9').status_code == 200
 
@@ -86,7 +88,7 @@ def test_redis_down_falls_back_to_db(client, seed_measurements, caplog):
     main.app.dependency_overrides[cache_module.get_cache] = lambda: BrokenCache()
 
     assert client.get('/measurements/latest').json()['id'] == 10
-    assert client.post('/measurements', json=NEW_ESP1).status_code == 201
+    assert client.post('/measurements', json=batch_of(NEW_ESP1)).status_code == 201
     assert client.delete('/measurements/10').status_code == 204
     assert 'cache read failed' in caplog.text
     assert 'cache invalidation failed' in caplog.text

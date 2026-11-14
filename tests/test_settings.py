@@ -16,6 +16,7 @@ def test_put_replaces_all_fields(client, default_thresholds):
         "humidity_close_pct": 60.0,
         "humidity_min_pct": 25.0,
         "cooldown_min": 10,
+        "ignore_measurements_older_than_min": 10,
     }
 
     response = client.put('/settings/thresholds', json=payload)
@@ -31,7 +32,7 @@ def test_put_replaces_all_fields(client, default_thresholds):
 
 @pytest.mark.parametrize(
         'field',
-        ['co2_open_ppm', 'co2_close_ppm', 'co2_max_ppm', 'humidity_open_pct', 'humidity_close_pct', 'humidity_min_pct', 'cooldown_min']
+        ['co2_open_ppm', 'co2_close_ppm', 'co2_max_ppm', 'humidity_open_pct', 'humidity_close_pct', 'humidity_min_pct', 'cooldown_min', 'ignore_measurements_older_than_min']
 )
 
 def test_put_missing_field_returns_422(client, default_thresholds, field):
@@ -65,7 +66,8 @@ def test_put_close_above_open_returns_422(client, default_thresholds, changes):
          {'humidity_open_pct': 70.0},    
          {'humidity_close_pct': 50.0},   
          {'humidity_min_pct': 25.0},     
-         {'cooldown_min': 5},]
+         {'cooldown_min': 5},
+         {'ignore_measurements_older_than_min': 10},]
 )
 
 def test_patch_changes_only_given_field(client, default_thresholds, patch):
@@ -98,6 +100,16 @@ def test_patch_breaking_rule_with_current_values_returns_422(client, patch):
 
     response = client.patch('/settings/thresholds', json=patch)
 
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize('value', [0, 61])
+def test_ignore_older_than_out_of_range_returns_422(client, default_thresholds, value):
+
+    response = client.patch('/settings/thresholds', json={'ignore_measurements_older_than_min': value})
+    assert response.status_code == 422
+
+    response = client.put('/settings/thresholds', json={**default_thresholds, 'ignore_measurements_older_than_min': value})
     assert response.status_code == 422
 
 

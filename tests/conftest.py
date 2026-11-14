@@ -9,6 +9,16 @@ import sensor_hub.db as db
 from sqlalchemy import text
 from sensor_hub.repositories import NotificationRepository
 import sensor_hub.cache as cache_module
+from datetime import datetime, timedelta, timezone
+
+
+def batch_of(payload: dict, created_at: datetime | None = None) -> dict:
+    """Turn one flat reading {device_id, co2_ppm, ...} into a POST /measurements body (a batch of 1).
+    created_at defaults to now → fresh, so the window rules run on it."""
+    values = {key: value for key, value in payload.items() if key != 'device_id'}
+    created_at = created_at or datetime.now(timezone.utc)
+    return {'device_id': payload['device_id'],
+            'measurements': [{**values, 'created_at': created_at.isoformat()}]}
 
 def get_test_settings() -> config.Settings:
     return config.Settings(api_key='test-key')
@@ -29,6 +39,7 @@ DEFAULT_THRESHOLDS = {
     "humidity_close_pct": 55.0,
     "humidity_min_pct": 30.0,
     "cooldown_min": 15,
+    "ignore_measurements_older_than_min": 5,
 }
 
 @pytest.fixture()
@@ -40,8 +51,8 @@ def db_session(engine):
     
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE measurements, threshold_settings, notifications RESTART IDENTITY"))
-        conn.execute(text("INSERT INTO threshold_settings (co2_open_ppm, co2_close_ppm, co2_max_ppm, humidity_open_pct, humidity_close_pct, humidity_min_pct, cooldown_min) "
-                          "VALUES (:co2_open_ppm, :co2_close_ppm, :co2_max_ppm, :humidity_open_pct, :humidity_close_pct, :humidity_min_pct, :cooldown_min)"), DEFAULT_THRESHOLDS)
+        conn.execute(text("INSERT INTO threshold_settings (co2_open_ppm, co2_close_ppm, co2_max_ppm, humidity_open_pct, humidity_close_pct, humidity_min_pct, cooldown_min, ignore_measurements_older_than_min) "
+                          "VALUES (:co2_open_ppm, :co2_close_ppm, :co2_max_ppm, :humidity_open_pct, :humidity_close_pct, :humidity_min_pct, :cooldown_min, :ignore_measurements_older_than_min)"), DEFAULT_THRESHOLDS)
 
     connection = engine.connect()
     transaction = connection.begin()
@@ -120,11 +131,14 @@ def seed_measurements(client, db_session):
     {"device_id": "esp-3", "co2_ppm": 1490, "temperature_c": 25.9, "humidity_pct": 58.0},
     ]
 
-    list_responses = []
-    for payload in SEED_MEASUREMENTS:
-        response = client.post('/measurements', json=payload)
-        list_responses.append(response.json())
+    # one batch per reading (like the ESP32 in normal operation), so the rules run on every one;
+    # created_at 1 s apart and all within the last minute → fresh, and id order == time order (id 10 = newest)
+    start = datetime.now(timezone.utc) - timedelta(seconds=60)
 
-    return list_responses
+    for i, payload in enumerate(SEED_MEASUREMENTS):
+        response = client.post('/measurements', json=batch_of(payload, start + timedelta(seconds=i)))
+        assert response.status_code == 201
+
+    return SEED_MEASUREMENTS
 
 

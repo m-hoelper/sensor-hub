@@ -1,7 +1,7 @@
 from sqlalchemy import Row
 from sqlalchemy.orm import Session
 from sensor_hub.repositories import MeasurementRepository, SettingsRepository, NotificationRepository
-from sensor_hub.schemas import MeasurementIn, ThresholdsIn, ThresholdsPatch, ThresholdsOut, MeasurementOut
+from sensor_hub.schemas import MeasurementBatchIn, ThresholdsIn, ThresholdsPatch, ThresholdsOut, MeasurementOut, BatchResult
 from sensor_hub.models import Measurement, ThresholdSettings, Notification
 from datetime import datetime, timezone
 from sensor_hub.rules import run_window_recommendation, build_message
@@ -22,24 +22,32 @@ class MeasurementService:
         self.notification_repo = NotificationRepository(db)
         self.cache = cache
 
-    def create_measurement(self, data: MeasurementIn) -> Measurement:
+    def create_measurement(self, batch: MeasurementBatchIn) -> BatchResult:
 
-        measurement = self.repo.add(data.model_dump())
+        items = batch.model_dump()['measurements']
 
-        settings = self.settings_repo.get()
-        notification = self.notification_repo.latest()
+        measurements = self.repo.add_many(batch.device_id, items)
 
-        new_state = run_window_recommendation(data, settings, notification, datetime.now(timezone.utc))
+        if measurements:
+            settings = self.settings_repo.get()
+            notification = self.notification_repo.latest()
 
-        if new_state is not None:
-            message = build_message(new_state, data, settings)
-            self.notification_repo.add(new_state, message, measurement.id)
+            latest = max(measurements, key= lambda x: x.created_at)
 
-        self.db.commit()
-        self.invalidate_cache(measurement.device_id)
-        logger.info("created measurement id=%s device=%s co2=%s",
-                    measurement.id, measurement.device_id, measurement.co2_ppm)
-        return measurement
+            new_state = run_window_recommendation(latest, settings, notification, datetime.now(timezone.utc))
+
+            if new_state is not None:
+                message = build_message(new_state, latest, settings)
+                self.notification_repo.add(new_state, message, latest.id)
+
+            self.db.commit()
+            self.invalidate_cache(batch.device_id)
+
+        logger.info("batch device=%s received=%s inserted=%s duplicates=%s",
+                    batch.device_id, len(batch.measurements), len(measurements), len(batch.measurements) - len(measurements))
+        
+        res = BatchResult(inserted=len(measurements), duplicates=len(batch.measurements) - len(measurements))
+        return res
 
     def get_measurements(self, device_id: str | None, limit: int, offset: int) -> list[Measurement]:
         newest_first = self.repo.find(device_id, limit, offset)

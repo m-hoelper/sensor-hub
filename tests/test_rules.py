@@ -6,7 +6,7 @@ from sensor_hub.rules import run_window_recommendation, build_message
 
 SETTINGS = SimpleNamespace(co2_open_ppm=1200, co2_close_ppm=800, co2_max_ppm=2000,
                            humidity_open_pct=65.0, humidity_close_pct=55.0,
-                           humidity_min_pct=30.0, cooldown_min=15)
+                           humidity_min_pct=30.0, cooldown_min=15, ignore_measurements_older_than_min=5)
 NOW = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
 OPEN, CLOSED = 'OPEN_RECOMMENDED', 'CLOSED'
 
@@ -14,8 +14,9 @@ OPEN, CLOSED = 'OPEN_RECOMMENDED', 'CLOSED'
 def last(state, minutes_ago=20):
     return SimpleNamespace(new_state=state, created_at=NOW - timedelta(minutes=minutes_ago))
 
-def reading(co2, humidity):
-    return SimpleNamespace(co2_ppm=co2, humidity_pct=humidity)
+def reading(co2, humidity, minutes_old=0):
+    return SimpleNamespace(co2_ppm=co2, humidity_pct=humidity,
+                           created_at=NOW - timedelta(minutes=minutes_old))
 
 
 @pytest.mark.parametrize(
@@ -39,6 +40,26 @@ def reading(co2, humidity):
 def test_window_recommendation(previous, co2, humidity, expected):
 
     assert run_window_recommendation(reading(co2, humidity), SETTINGS, previous, NOW) == expected
+
+
+@pytest.mark.parametrize(
+        ['minutes_old', 'expected'],
+        [(0,    OPEN),     # live reading
+         (4.99, OPEN),     # just inside the window
+         (5,    OPEN),     # boundary: exactly ignore_measurements_older_than_min is still fresh (>)
+         (5.01, None),     # just too old → backfill, no notification
+         (60 * 24, None)]  # a day old (sync after an outage)
+)
+def test_stale_reading_never_triggers(minutes_old, expected):
+
+    # CO2 far above the hard limit: without the guard this would always open
+    assert run_window_recommendation(reading(2500, 45, minutes_old), SETTINGS, None, NOW) == expected
+
+
+def test_stale_guard_runs_before_state_machine():
+
+    # previous state OPEN + fresh air would normally close — a stale reading must not
+    assert run_window_recommendation(reading(700, 50, minutes_old=10), SETTINGS, last(OPEN), NOW) is None
 
 
 @pytest.mark.parametrize(

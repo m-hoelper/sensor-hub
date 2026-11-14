@@ -1,13 +1,13 @@
 from datetime import datetime
-from sqlalchemy import func, Index, Identity, BIGINT, DateTime, CheckConstraint, ForeignKey, text
+from sqlalchemy import func, Index, Identity, BIGINT, DateTime, CheckConstraint, ForeignKey, text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sensor_hub.db import Base
 
 class Measurement(Base):
     __tablename__ = "measurements"
-    __table_args__ = (Index("ix_measurements_device_created", "device_id", "created_at"),)
+    __table_args__ = (UniqueConstraint("device_id", "created_at", name="uq_measurements_device_created"),)
     id: Mapped[int] = mapped_column(BIGINT, Identity(always=True), primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     device_id: Mapped[str]
     co2_ppm: Mapped[int]
     temperature_c: Mapped[float]
@@ -24,6 +24,7 @@ class ThresholdSettings(Base):
     humidity_close_pct: Mapped[float]
     humidity_min_pct: Mapped[float]
     cooldown_min: Mapped[int]
+    ignore_measurements_older_than_min: Mapped[int]
 
 class Notification(Base):
     __tablename__ = "notifications"

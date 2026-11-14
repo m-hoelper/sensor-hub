@@ -59,6 +59,9 @@ static_assert(sizeof(Record) == 16, "Record must be 16 bytes");
 const uint32_t CAPACITY = 20160;
 Header hdr;
 
+const uint32_t CHUNK_SIZE = 500;
+Record chunk[CHUNK_SIZE];
+
 void saveHeader() {
     File f = LittleFS.open("/hdr.bin", "w");
     if (!f) {return;}
@@ -99,6 +102,32 @@ void appendRecord(const Record& r) {
     }
 
     saveHeader();
+}
+
+void readChunk(uint32_t& n) {
+    if (n == 0) {return;}
+
+    File f;
+    if (LittleFS.exists("/buf.bin")) {
+        f = LittleFS.open("/buf.bin", "r");
+    } else { n = 0; return; }
+
+    if (!f) {n = 0; return;}
+
+    for (uint32_t i = 0; i < n; i += 1) {
+
+        f.seek((hdr.readIdx + i) % CAPACITY * sizeof(chunk[i]));
+        f.read((uint8_t*) &chunk[i], sizeof(chunk[i]));
+    }
+
+    f.close();
+}
+
+bool sendChunk(uint32_t& n) {
+
+    if (n==0) {return false;}
+
+    return true;
 }
 
 void setup() {
@@ -239,6 +268,18 @@ void loop() {
         tempSum = 0.0;
         humSum = 0.0;
         sampleCount = 0;
+
+    }
+
+    if (hdr.count > 0) {
+        uint32_t n = min(hdr.count, CHUNK_SIZE);
+        readChunk(n);
+        if (sendChunk(n)) {
+            hdr.count -= n;
+            hdr.readIdx = (hdr.readIdx + n) % CAPACITY;
+            saveHeader();
+            Serial.printf("synced %lu, read %lu, count %lu\n", n, hdr.readIdx, hdr.count);
+        }
 
     }
 

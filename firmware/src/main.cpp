@@ -5,6 +5,10 @@
 #include "secrets.h"
 #include <time.h>
 #include <LittleFS.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+const char* DEVICE_ID = "esp32-s3";
 
 const uint8_t SDA_PIN = 8;
 const uint8_t SCL_PIN = 9;
@@ -65,7 +69,7 @@ Record chunk[CHUNK_SIZE];
 const uint32_t SYNC_DELAY_ON_FAILURE_MS = 30000;
 const uint32_t MIN_SYNC_DELAY_MS = 50;
 uint32_t lastSyncMs = 0;
-uint32_t syncDelayMs = MIN_SYNC_DELAY_MS;  
+uint32_t syncDelayMs = MIN_SYNC_DELAY_MS;
 
 void saveHeader() {
     File f = LittleFS.open("/hdr.bin", "w");
@@ -128,11 +132,36 @@ void readChunk(uint32_t& n) {
     f.close();
 }
 
-bool sendChunk(uint32_t& n) {
-
+bool sendChunk(uint32_t n) {
     if (n==0) {return false;}
 
-    return true;
+    JsonDocument doc;
+    doc["device_id"] = DEVICE_ID;
+    JsonArray items = doc["measurements"].to<JsonArray>();
+
+    for (uint32_t i = 0; i < n; i += 1) {
+        JsonObject item = items.add<JsonObject>();
+        item["created_at"] = chunk[i].epoch;
+        item["co2_ppm"] = chunk[i].co2;
+        item["temperature_c"] = chunk[i].temp100 / 100.0;
+        item["humidity_pct"] = chunk[i].hum100 / 100.0;
+    }
+
+    String body;
+    serializeJson(doc, body);
+
+    HTTPClient http;
+    http.begin(BACKEND_URL);
+    http.setConnectTimeout(2000);
+    http.setTimeout(3000);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-API-Key", API_KEY);
+
+    int status = http.POST(body);
+    http.end();
+
+    Serial.printf("POST %lu records → %d\n", n, status);
+    return status >= 200 && status < 300;
 }
 
 void setup() {

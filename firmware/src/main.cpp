@@ -62,6 +62,11 @@ Header hdr;
 const uint32_t CHUNK_SIZE = 500;
 Record chunk[CHUNK_SIZE];
 
+const uint32_t SYNC_DELAY_ON_FAILURE_MS = 30000;
+const uint32_t MIN_SYNC_DELAY_MS = 50;
+uint32_t lastSyncMs = 0;
+uint32_t syncDelayMs = MIN_SYNC_DELAY_MS;  
+
 void saveHeader() {
     File f = LittleFS.open("/hdr.bin", "w");
     if (!f) {return;}
@@ -271,7 +276,8 @@ void loop() {
 
     }
 
-    if (hdr.count > 0) {
+    if (hdr.count > 0 && now - lastSyncMs >= syncDelayMs) {
+        lastSyncMs = now;
         uint32_t n = min(hdr.count, CHUNK_SIZE);
         readChunk(n);
         if (sendChunk(n)) {
@@ -279,8 +285,12 @@ void loop() {
             hdr.readIdx = (hdr.readIdx + n) % CAPACITY;
             saveHeader();
             Serial.printf("synced %lu, read %lu, count %lu\n", n, hdr.readIdx, hdr.count);
-        }
+            syncDelayMs = MIN_SYNC_DELAY_MS;
 
+        } else {
+            Serial.printf("sync failed, count %lu, retry in %lu s\n", hdr.count, SYNC_DELAY_ON_FAILURE_MS / 1000);
+            syncDelayMs = SYNC_DELAY_ON_FAILURE_MS;
+        }
     }
 
 }

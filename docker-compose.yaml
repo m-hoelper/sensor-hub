@@ -13,11 +13,40 @@ services:
       test: ["CMD-SHELL", "pg_isready -U sensor -d sensorhub"]
       interval: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7
     ports:
       - "127.0.0.1:6379:6379"
+    restart: unless-stopped
+
+  api:
+    build: .
+    env_file: .env                                # API key, Telegram etc. at runtime, never baked into the image
+    environment:                                  # overrides .env: inside the network the hosts are the service names
+      DATABASE_URL: postgresql+psycopg://sensor:${DB_PASSWORD}@db:5432/sensorhub
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"                               # all interfaces (not 127.0.0.1): the ESP32 posts over Wi-Fi
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:                                         # sends the notifications (Telegram), same image, other command
+    build: .
+    command: ["python", "-m", "sensor_hub.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://sensor:${DB_PASSWORD}@db:5432/sensorhub
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      api:
+        condition: service_started               # api runs the migrations first
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana-oss:11.6.0
@@ -40,6 +69,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

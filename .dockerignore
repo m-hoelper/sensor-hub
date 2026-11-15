@@ -1,0 +1,13 @@
+# secrets never go into the image; Compose passes them in at runtime (env_file)
+.env
+.env.*
+
+.venv/
+__pycache__/
+.pytest_cache/
+.git/
+notes/
+firmware/
+grafana/
+tests/
+scripts/

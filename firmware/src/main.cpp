@@ -244,8 +244,8 @@ void loop() {
         lastTimeMs = now;
         Serial.printf("uptime %lu s\n", now / 1000);
 
-        if (!ledOn) {rgbLedWrite(RGB_BUILTIN, 10, 30, 80);
-        } else {rgbLedWrite(RGB_BUILTIN, 0, 0, 0);}
+        // if (!ledOn) {rgbLedWrite(RGB_BUILTIN, 10, 30, 80);
+        // } else {rgbLedWrite(RGB_BUILTIN, 0, 0, 0);}
         
         ledOn = !ledOn;
     }

@@ -21,7 +21,7 @@ Personal project (November 2026), built end to end: firmware in C++ (Arduino on 
 
 | The same messages on my phone | The device: ESP32-S3 + SCD40 | The board, hand-soldered in the lab |
 |:---:|:---:|:---:|
-| <img src="docs/media/telegram.png" height="220" alt="Telegram chat with open and close window messages from the Sensor Hub bot"> | <img src="docs/media/hardware.jpg" height="220" alt="ESP32-S3 board connected to an SCD40 CO2 sensor"> | <img src="docs/media/soldering.jpg" height="220" alt="Soldering station with the ESP32-S3 board"> |
+| <img src="docs/media/telegram.png" height="190" alt="Telegram chat with open and close window messages from the Sensor Hub bot"> | <img src="docs/media/hardware.jpg" height="190" alt="ESP32-S3 board connected to an SCD40 CO2 sensor"> | <img src="docs/media/soldering.jpg" height="190" alt="Soldering station with the ESP32-S3 board"> |
 
 ## What it does
 

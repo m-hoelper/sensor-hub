@@ -90,17 +90,17 @@ The unique constraint on `(device_id, created_at)` makes the upload idempotent. 
 
 Guards before any transition:
 - **Stale data:** readings older than `ignore_measurements_older_than_min` (5 min) never trigger anything. Without this, uploading a night's backlog would replay old alarms.
-- **Cooldown:** no state change within `cooldown_min` (5 min) of the last notification.
+- **Cooldown:** no state change within `cooldown_min` of the last notification.
 
-**Dry air.** In heated rooms in winter, airing makes the air drier because cold outside air holds little water. Below `humidity_min` (35 %) the rule therefore waits for a higher CO₂ value (`co2_max`, 1500 ppm) before recommending airing, and recommends closing as soon as CO₂ is below that value.
+**Dry air.** In heated rooms in winter, airing makes the air drier because cold outside air holds little water. Below `humidity_min_pct` the rule therefore waits for a higher CO₂ value (`co2_max_ppm`) before recommending airing, and recommends closing as soon as CO₂ is below that value.
 
-**Current values** (set at runtime, the migration seeds more conservative defaults):
+**Values.** The migration seeds conservative defaults; the values I run at home were set with `PATCH /settings/thresholds` after a few days of data:
 
-| Setting | Value |
-|---|---|
-| `co2_open_ppm` / `co2_close_ppm` / `co2_max_ppm` | 1000 / 850 / 1500 |
-| `humidity_open_pct` / `humidity_close_pct` / `humidity_min_pct` | 60 / 57 / 35 |
-| `cooldown_min` / `ignore_measurements_older_than_min` | 5 / 5 |
+| Setting | Default (fresh install) | Tuned for my room |
+|---|---|---|
+| `co2_open_ppm` / `co2_close_ppm` / `co2_max_ppm` | 1200 / 800 / 2000 | 1000 / 850 / 1500 |
+| `humidity_open_pct` / `humidity_close_pct` / `humidity_min_pct` | 65 / 55 / 30 | 60 / 57 / 35 |
+| `cooldown_min` / `ignore_measurements_older_than_min` | 15 / 5 | 5 / 5 |
 
 The close thresholds were tuned with real data: the room sits at 55–58 % humidity whether the window is open or not, so a close threshold of 50 % meant the "close" message never came. Humidity changes slowly and smoothly, so a 3-point gap is enough; CO₂ jumps by 50–100 ppm when someone moves, so it gets 150 ppm.
 
@@ -152,7 +152,7 @@ FOR UPDATE SKIP LOCKED;
 
 ## 8. Known limitations
 
-- The rule knows its recommendation, not the real window state. If the window is closed before CO₂ drops below 850 ppm, the state stays `OPEN_RECOMMENDED` and no new "open" message comes until it has closed once.
+- The rule knows its recommendation, not the real window state. If the window is closed before CO₂ drops below `co2_close_ppm`, the state stays `OPEN_RECOMMENDED` and no new "open" message comes until it has closed once.
 - No reminders and no quiet hours: one message per state change, also at night.
 - A full buffer overwrites the oldest readings, so an outage of more than a week loses data.
 - Timestamps come from NTP; until the first sync after power-on, nothing is stored.

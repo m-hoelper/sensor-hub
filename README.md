@@ -59,14 +59,22 @@ The sensor never stops. The backend only has to run when I want live data or not
 
 **API.** `POST /measurements` takes a batch of 1–500 readings with the device's own timestamps (`AwareDatetime`, timezone required). One insert statement writes all rows and returns only the new ones, so the response reports `{inserted, duplicates}`. Reads are open, writes need the `X-API-Key` header (compared in constant time).
 
-**Window rule.** The rule runs once per batch on the newest reading, and only if it is less than 5 minutes old, so an uploaded backlog never triggers stale messages. It is a two-state machine with hysteresis:
+**Window rule.** The rule runs once per batch on the newest reading, and only if it is less than `ignore_measurements_older_than_min` (5 min) old, so an uploaded backlog never triggers stale messages. It is a two-state machine with hysteresis:
 
-| From | To | When (current settings) |
+| From | To | When |
 |---|---|---|
-| `CLOSED` | `OPEN_RECOMMENDED` | CO₂ ≥ 1000 ppm, or humidity ≥ 60 % (in very dry air, below 35 %, CO₂ has to reach 1500 ppm) |
-| `OPEN_RECOMMENDED` | `CLOSED` | CO₂ ≤ 850 ppm **and** humidity ≤ 57 %, or the air has become very dry |
+| `CLOSED` | `OPEN_RECOMMENDED` | CO₂ ≥ `co2_open_ppm`, or humidity ≥ `humidity_open_pct`. In very dry air (humidity ≤ `humidity_min_pct`) CO₂ has to reach `co2_max_ppm` |
+| `OPEN_RECOMMENDED` | `CLOSED` | CO₂ ≤ `co2_close_ppm` **and** humidity ≤ `humidity_close_pct`, or the air is very dry and CO₂ is below `co2_max_ppm` |
 
-The gap between the open and close thresholds stops the state from flapping around a single value. A cooldown (5 min) limits how often the state can change. The thresholds follow the German Environment Agency's guidance (CO₂ below 1000 ppm is harmless, above 2000 ppm unacceptable; 40–60 % humidity) and are changed at runtime with `PATCH /settings/thresholds`.
+The thresholds live in the database and are changed at runtime with `PATCH /settings/thresholds`. A fresh install starts with the migration's defaults; the values I run at home were tuned with a few days of real data:
+
+| Setting | Default (fresh install) | Tuned for my room |
+|---|---|---|
+| `co2_open_ppm` / `co2_close_ppm` / `co2_max_ppm` | 1200 / 800 / 2000 | 1000 / 850 / 1500 |
+| `humidity_open_pct` / `humidity_close_pct` / `humidity_min_pct` | 65 / 55 / 30 % | 60 / 57 / 35 % |
+| `cooldown_min` (minimum time between state changes) | 15 min | 5 min |
+
+The gap between open and close stops the state from flapping around a single value. The tuned values follow the German Environment Agency's guidance (CO₂ below 1000 ppm is harmless, above 2000 ppm unacceptable; 40–60 % humidity). The close thresholds moved closer to the open ones because the room sits at 55–58 % humidity whether the window is open or not, so with a lower close threshold the state stayed in `OPEN_RECOMMENDED` and the "close" message never came.
 
 **Notifications.** A state change creates a row in `notifications` in the same transaction as the measurements, so a message can never be lost between "saved" and "sent". The worker picks the oldest unsent row with `FOR UPDATE SKIP LOCKED`, sends it, and marks it sent. A failed send increments `attempts` and stores an error text that never contains the bot token.
 

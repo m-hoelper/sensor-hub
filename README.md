@@ -4,6 +4,8 @@ An indoor air-quality monitor for my room. An **ESP32-S3 with a Sensirion SCD40*
 
 Personal project (November 2026), built end to end: firmware in C++ (Arduino on ESP32), backend in Python, deployment with Docker Compose.
 
+**How it was built:** I wrote the backend and firmware code myself, with an AI assistant (Claude) as tutor and reviewer. The test suite, the Telegram sender, the Grafana dashboard, the Docker setup and this documentation were written with the assistant and reviewed by me.
+
 **Highlights:**
 - **No data loss when the backend is offline.** The ESP32 keeps up to one week of readings in a ring buffer on its flash and uploads the backlog in batches when the server is reachable again.
 - **Idempotent batch upload.** Each reading is unique per `(device_id, created_at)`. A resent batch after a lost response inserts nothing twice (`INSERT … ON CONFLICT DO NOTHING RETURNING`).

@@ -1,5 +1,7 @@
 # Sensor Hub — ESP32 · FastAPI · Postgres · Docker
 
+[![CI](https://github.com/m-hoelper/sensor-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/m-hoelper/sensor-hub/actions/workflows/ci.yml)
+
 An indoor air-quality monitor for my room. An **ESP32-S3 with a Sensirion SCD40** measures CO₂, temperature and humidity, buffers every reading in flash and uploads it to a **FastAPI backend**. The backend stores the data in **Postgres**, shows it in **Grafana**, and sends a **Telegram message** when the window should be opened or closed. The whole backend starts with one `docker compose up`.
 
 Personal project (November 2026), built end to end: firmware in C++ (Arduino on ESP32), backend in Python, deployment with Docker Compose.
@@ -127,7 +129,7 @@ Dockerfile, docker-compose.yaml
 
 ## Tests
 
-153 pytest test cases run against a real Postgres test database (`TEST_DATABASE_URL`), with the Redis cache and the Telegram API replaced by fakes. They cover batch validation, duplicate handling, the rule transitions, the cache fallback, threshold validation, and the worker's retry and locking behaviour.
+153 pytest test cases run against a real Postgres test database (`TEST_DATABASE_URL`), with the Redis cache and the Telegram API replaced by fakes. They cover batch validation, duplicate handling, the rule transitions, the cache fallback, threshold validation, and the worker's retry and locking behaviour. GitHub Actions runs them on every push, together with a build of the Docker image and of the firmware.
 
 ```bash
 uv run pytest

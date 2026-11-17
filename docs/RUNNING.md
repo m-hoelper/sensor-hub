@@ -1,81 +1,145 @@
-# Run notes
+# Run Sensor Hub
 
-## Backend
+This guide shows how to start the backend, flash the firmware, and run the tests.
 
-Needs Docker (Docker Desktop on macOS).
+## Start the backend
 
-```bash
-cp .env.example .env               # then fill in the values below
-docker compose up -d --build       # all five services in the background
-scripts/create_grafana_role.sh     # once, and again after changing GRAFANA_DB_PASSWORD
-```
+You need Docker. On macOS, use Docker Desktop.
 
-| Variable | Used for |
+1. Copy the example environment file:
+
+	```bash
+	cp .env.example .env
+	```
+
+2. Fill in the values in `.env`. The table after these steps describes them.
+3. Start all five services in the background:
+
+	```bash
+	docker compose up -d --build
+	```
+
+4. Create the read-only Postgres role for Grafana. Run this command again each time you change `GRAFANA_DB_PASSWORD`.
+
+	```bash
+	scripts/create_grafana_role.sh
+	```
+
+| Variable | Use |
 |---|---|
-| `API_KEY` | `X-API-Key` header for write endpoints; the same value goes into the firmware's `secrets.h` |
-| `DB_PASSWORD` | Postgres password. Only applied when the database volume is created for the first time |
-| `DATABASE_URL`, `REDIS_URL` | For running the API outside Docker (`localhost`). Compose overrides both with the service names |
-| `TEST_DATABASE_URL` | Separate database for the tests |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Optional. Without them the worker only logs messages. `scripts/telegram_chat_id.py` finds the chat id after you message the bot |
-| `GRAFANA_DB_PASSWORD` | Password of the read-only `grafana_reader` role |
+| `API_KEY` | The `X-API-Key` header for write endpoints. The firmware needs the same value in `secrets.h`. |
+| `DB_PASSWORD` | The Postgres password. Postgres reads it only when Docker creates the database volume for the first time. |
+| `DATABASE_URL`, `REDIS_URL` | The database and Redis addresses for an API that runs outside Docker, on `localhost`. Compose replaces both with the service names. |
+| `TEST_DATABASE_URL` | A separate database for the tests. |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Optional. Without them, the worker only logs the messages. To find the chat ID, send a message to the bot and run `scripts/telegram_chat_id.py`. |
+| `GRAFANA_DB_PASSWORD` | The password of the read-only `grafana_reader` role. |
 
-| URL | What |
+When the stack runs, these pages are available:
+
+| URL | Page |
 |---|---|
-| `http://localhost:8000/docs` | API with interactive docs |
-| `http://localhost:3000` | Grafana dashboard (no login, read-only) |
+| `http://localhost:8000/docs` | The interactive API docs. |
+| `http://localhost:3000` | The Grafana dashboard, read-only and without login. |
 
-## Which command after which change
+Do not run `uvicorn` on the host while the stack runs. It competes with the `api` container for port 8000.
+
+## Apply a change
 
 | Change | Command |
 |---|---|
-| Python code, migration, Dockerfile, dependencies | `docker compose up -d --build` |
-| `.env` | `docker compose up -d` (recreates the containers; `restart` would keep the old environment) |
-| Thresholds | `PATCH /settings/thresholds`, no restart |
-| Wi-Fi, API key or backend URL on the device | Edit `secrets.h` and flash again |
+| Python code, a migration, the Dockerfile, or dependencies | `docker compose up -d --build` |
+| `.env` | `docker compose up -d`. This command recreates the containers. `docker compose restart` keeps the old environment. |
+| Thresholds | `PATCH /settings/thresholds`. No restart is needed. |
+| Wi-Fi, API key, or backend URL on the device | Edit `secrets.h` and flash the firmware again. |
 
-Do not run `uvicorn` on the host at the same time: it competes with the `api` container for port 8000.
+## Flash the firmware
 
-## Firmware
+You need PlatformIO, as the VS Code extension or as the CLI. The board is an ESP32-S3 with 16 MB flash and 8 MB PSRAM. [`platformio.ini`](../firmware/platformio.ini) sets it up as `esp32-s3-devkitc-1`.
 
-Needs PlatformIO (VS Code extension or CLI). Board: ESP32-S3 with 16 MB flash and 8 MB PSRAM (`esp32-s3-devkitc-1` in [`platformio.ini`](../firmware/platformio.ini)).
+1. Wire the SCD40 to the ESP32-S3:
 
-**Wiring** (SCD40 → ESP32-S3): VDD → 3V3, GND → GND, SDA → GPIO 8, SCL → GPIO 9. The SCD40's I²C address is `0x62`.
+	| SCD40 | ESP32-S3 |
+	|---|---|
+	| VDD | 3V3 |
+	| GND | GND |
+	| SDA | GPIO 8 |
+	| SCL | GPIO 9 |
+
+	The I²C address of the SCD40 is `0x62`.
+
+2. Create the secrets file:
+
+	```bash
+	cd firmware
+	cp include/secrets.example.h include/secrets.h
+	```
+
+3. Fill in Wi-Fi, the API key, and the backend URL in `include/secrets.h`. The backend URL has the form `http://<mac-ip>:8000/measurements`.
+4. Build and flash the firmware:
+
+	```bash
+	pio run -t upload
+	```
+
+5. Open the serial log. It shows the readings, the stored records, and the POST results.
+
+	```bash
+	pio device monitor
+	```
+
+The first record arrives about 4.5 minutes after power-on: 4 minutes of warm-up, then the first 30 s window.
+
+For the ESP32 to reach the Mac, the Mac needs a fixed address on the LAN and must allow incoming connections for Docker. To get a fixed address, set up a DHCP reservation in the router.
+
+If the serial log shows `POST <n> records → 401`, the API key in `secrets.h` does not match `.env`. The device keeps the readings until the keys match.
+
+## Send readings without hardware
+
+The simulator sends random readings for three fake devices, in the same batch format as the ESP32:
 
 ```bash
-cd firmware
-cp include/secrets.example.h include/secrets.h     # Wi-Fi, API key, BACKEND_URL=http://<mac-ip>:8000/measurements
-pio run -t upload
-pio device monitor                                  # serial log: readings, stored records, POST results
+uv run python scripts/simulator.py
 ```
 
-- The first record is stored about 4.5 minutes after power-on (warm-up plus the first 30 s window).
-- The Mac needs a fixed address on the LAN (DHCP reservation in the router) and must allow incoming connections for Docker.
-- A `POST … → 401` in the serial log means the API key in `secrets.h` does not match `.env`. The device keeps buffering until it matches.
+## Run the tests
 
-## Without hardware
-
-```bash
-uv run python scripts/simulator.py      # random readings for three fake devices, same batch format as the ESP32
-```
-
-## Tests
-
-The tests need a Postgres database at `TEST_DATABASE_URL` (the `db` container works; create a separate database for it).
+The tests need a separate Postgres database at `TEST_DATABASE_URL`. You can create that database in the `db` container.
 
 ```bash
 uv sync
 uv run pytest
 ```
 
-## Useful commands
+## Inspect the running stack
 
 ```bash
-docker compose ps                         # status of all services
-docker compose logs -f api worker         # live logs: uploads, rule decisions, Telegram sends
-docker stats                              # CPU and memory per container
+docker compose ps
+```
+
+```bash
+docker compose logs -f api worker
+```
+
+```bash
+docker stats
+```
+
+The first command shows the status of all services. The second follows the logs of uploads, rule decisions, and Telegram sends. The third shows CPU and memory per container.
+
+To read the thresholds and the window state:
+
+```bash
 curl -s localhost:8000/settings/thresholds
+```
+
+```bash
 curl -s localhost:8000/notifications/state
+```
+
+To change one threshold:
+
+```bash
 curl -s -X PATCH localhost:8000/settings/thresholds \
-  -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-  -d '{"co2_close_ppm": 850}'
+	-H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+	-d '{"co2_close_ppm": 850}'
 ```

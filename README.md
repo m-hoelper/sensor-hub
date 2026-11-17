@@ -46,14 +46,14 @@ The other documents cover these topics:
 ## The sensor keeps measuring when the backend is off
 
 ```
- ESP32-S3 + SCD40 (always on, USB power)                    Mac: Docker Compose (when it is on)
- ┌──────────────────────────────────────┐                  ┌──────────────────────────────────────────────┐
- │ sample every 1 s, average over 30 s  │                  │ api (FastAPI) ──► Postgres ◄── Grafana         │
- │ → ring buffer in flash (1 week)      │  POST            │   │  ON CONFLICT DO NOTHING      (read-only role)│
- │ backlog > 0: send oldest ≤ 500  ─────┼─ /measurements ─►│   │  window rule, same commit                 │
- │ 2xx: drop them · error: retry in 30 s│  X-API-Key       │   ├──► Redis (latest-reading cache)            │
- │ time: NTP, UTC                       │ ◄── 201 ─────────┤   └──► notifications (outbox) ──► worker ──► Telegram
- └──────────────────────────────────────┘ {inserted, dup.} └──────────────────────────────────────────────┘
+ ESP32-S3 + SCD40 (always on, USB power)                       Mac: Docker Compose (when it is on)
+ ┌───────────────────────────────────────┐                     ┌─────────────────────────────────────────────────────────┐
+ │ sample every 1 s, average over 30 s   │                     │ api (FastAPI) ──► Postgres ◄── Grafana (read-only role) │
+ │ → ring buffer in flash (1 week)       │ POST /measurements  │   │  ON CONFLICT DO NOTHING                             │
+ │ backlog > 0: send oldest ≤ 500        │ X-API-Key ────────► │   │  window rule, same commit                           │
+ │ 2xx: drop them · error: retry in 30 s │ ◄─────── 201 ────── │   ├──► Redis (latest-reading cache)                     │
+ │ time: NTP, UTC                        │ {inserted, dup.}    │   └──► notifications (outbox) ──► worker ──► Telegram   │
+ └───────────────────────────────────────┘                     └─────────────────────────────────────────────────────────┘
 ```
 
 The backend has to run only when I want live data or notifications. Readings taken while it is off keep their original timestamps and arrive when the API answers again.

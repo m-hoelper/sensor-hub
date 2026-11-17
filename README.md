@@ -102,14 +102,14 @@ Fill in the API key and the database passwords in `.env` before you start. The T
 
 ```
 src/sensor_hub/
-	main.py                    FastAPI app
-	routes/                    measurements, settings, notifications
-	services.py                business logic: batch insert, rule call, cache
-	repositories.py            SQLAlchemy queries
-	rules.py                   window state machine and message text
-	worker.py, telegram.py     outbox worker and Telegram sender
-	models.py, schemas.py      database tables and Pydantic models
-	config.py, cache.py, db.py settings from the environment, Redis, sessions
+  main.py                    FastAPI app
+  routes/                    measurements, settings, notifications
+  services.py                business logic: batch insert, rule call, cache
+  repositories.py            SQLAlchemy queries
+  rules.py                   window state machine and message text
+  worker.py, telegram.py     outbox worker and Telegram sender
+  models.py, schemas.py      database tables and Pydantic models
+  config.py, cache.py, db.py settings from the environment, Redis, sessions
 migrations/                  Alembic migrations
 tests/                       pytest suite against a real Postgres test database
 firmware/                    PlatformIO project for the ESP32-S3 (src/main.cpp)
